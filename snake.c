@@ -249,17 +249,13 @@ static void render(struct snake* snake) {
     render_at(snake->apple_pos.x, snake->apple_pos.y, APPLE);
 
     /* body */
-    uint32_t length = 0;
     for (segment = snake->body.head; segment != NULL; segment = segment->next) {
         int color = segment == snake->body.head ? SNAKE_HEAD : SNAKE_BODY;
         render_at(segment->pos.x, segment->pos.y, color);
-
-        length++;
     }
 
     color_set(TEXT, NULL);
-    mvprintw(SCREEN_HEIGHT, 0, "Length: %u\n", length);
-    mvprintw(SCREEN_HEIGHT + 1, 0, "Pending: %u\n", snake->body.pending_segments);
+    mvprintw(SCREEN_HEIGHT, 0, "Score: %u\n", snake->score);
 
     refresh();
 }
