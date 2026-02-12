@@ -37,6 +37,11 @@ struct body {
     uint32_t pending_segments;
 };
 
+struct action {
+    struct ivec2 direction;
+    struct action* next;
+};
+
 struct snake {
     struct body body;
     struct ivec2 direction;
@@ -45,6 +50,7 @@ struct snake {
     uint32_t score;
 
     int game_over;
+    struct action* buffered_action;
 };
 
 static void add_head(struct body* body, const struct uvec2* pos) {
@@ -103,9 +109,19 @@ static void init_snake(struct snake* snake) {
 }
 
 static void destroy_snake(struct snake* snake) {
+    struct action* action;
     struct segment* segment;
 
-    /* destroy body first */
+    /* free buffered actions */
+    action = snake->buffered_action;
+    while (action) {
+        struct action* next = action->next;
+
+        free(action);
+        action = next;
+    }
+
+    /* destroy body */
     segment = snake->body.head;
     while (segment) {
         struct segment* next = segment->next;
@@ -142,32 +158,62 @@ static void init_curses() {
 
 static void shutdown_curses() { endwin(); }
 
-static void turn(struct snake* snake, int32_t xdir, int32_t ydir) {
-    if (xdir == -snake->direction.x || ydir == -snake->direction.y) {
+static void turn(struct snake* snake, const struct ivec2* dir) {
+    if (dir->x == -snake->direction.x || dir->y == -snake->direction.y) {
         return; /* cant turn around into itself */
     }
 
-    snake->direction.x = xdir;
-    snake->direction.y = ydir;
+    memcpy(&snake->direction, dir, sizeof(struct ivec2));
+}
+
+static void pop_action(struct snake* snake) {
+    struct action* popped_action = snake->buffered_action;
+    if (!popped_action) {
+        return;
+    }
+
+    turn(snake, &popped_action->direction);
+
+    snake->buffered_action = popped_action->next;
+    free(popped_action);
+}
+
+static void buffer_turn(struct snake* snake, int32_t x, int32_t y) {
+    struct action* action = malloc(sizeof(struct action));
+
+    action->direction.x = x;
+    action->direction.y = y;
+    action->next = NULL;
+
+    if (!snake->buffered_action) {
+        snake->buffered_action = action;
+    } else {
+        struct action* prev_buffered = snake->buffered_action;
+        while (prev_buffered->next) {
+            prev_buffered = prev_buffered->next;
+        }
+
+        prev_buffered->next = action;
+    }
 }
 
 static void process_key(struct snake* snake, int ch) {
     switch (ch) {
     case 'w':
     case KEY_UP:
-        turn(snake, 0, -1);
+        buffer_turn(snake, 0, -1);
         break;
     case 's':
     case KEY_DOWN:
-        turn(snake, 0, 1);
+        buffer_turn(snake, 0, 1);
         break;
     case 'a':
     case KEY_LEFT:
-        turn(snake, -1, 0);
+        buffer_turn(snake, -1, 0);
         break;
     case 'd':
     case KEY_RIGHT:
-        turn(snake, 1, 0);
+        buffer_turn(snake, 1, 0);
         break;
     case 'q':
         snake->game_over = 1;
@@ -180,6 +226,9 @@ static void process_input(struct snake* snake) {
     while ((ch = getch()) != ERR) {
         process_key(snake, ch);
     }
+
+    /* pop only one action */
+    pop_action(snake);
 }
 
 static void get_next_head_pos(const struct uvec2* prev_pos, const struct ivec2* dir,
