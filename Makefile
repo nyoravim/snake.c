@@ -6,7 +6,6 @@ snake: snake.o
 snake.o: snake.c
 	$(CC) -c -o $@ $^
 
-.PHONY: snake
-
+.PHONY: clean
 clean:
 	rm snake snake.o
